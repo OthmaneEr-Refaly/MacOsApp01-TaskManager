@@ -3,9 +3,6 @@ import SwiftUI
 // MARK: - Everything you'd want to tweak lives here.
 struct WindowDesign {
     var backgroundColor: Color = Color(red: 0.05, green: 0.05, blue: 0.06)
-
-    // How rounded the window itself is — should roughly match
-    // the actual macOS window corner radius so the glow hugs it.
     var windowCornerRadius: CGFloat = 12
 
     static let `default` = WindowDesign()
@@ -16,16 +13,19 @@ struct ContentView: View {
     var design: WindowDesign = .default
 
     var body: some View {
-        ZStack {
-            design.backgroundColor
-                .ignoresSafeArea()
+        GeometryReader { geo in
+            ZStack {
+                design.backgroundColor
+                    .ignoresSafeArea()
 
-            // Your real content goes here.
+                ProjectPickerRuler()
+                    .frame(width: geo.size.width - 80)
+                    // same "slightly above middle" spot as before
+                    .position(x: geo.size.width / 2, y: geo.size.height * 0.42)
+            }
         }
         .ignoresSafeArea()
-        .overlay(
-            AnimatedGlowBorder(cornerRadius: design.windowCornerRadius)
-        )
+        .overlay(AnimatedGlowBorder(cornerRadius: design.windowCornerRadius))
         .background(WindowChromeSetup())
     }
 }
@@ -52,3 +52,6 @@ struct WindowChromeSetup: NSViewRepresentable {
     ContentView()
         .frame(width: 700, height: 560)
 }
+
+
+
