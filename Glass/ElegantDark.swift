@@ -1,15 +1,19 @@
 import SwiftUI
 
-// MARK: - Elegant dark, glowing-rim style — glossy black fill,
-// thin metallic border with a light sweep, soft glow + drop shadow.
+// MARK: - Dark glass fill with a plain neutral rim. The rim used
+// to be an AngularGradient mixing white/gray/orange (the "metallic"
+// look) — that's what was still reading as color everywhere even
+// with glow shadows at 0. Stripped to a flat, colorless stroke as
+// the new blank-slate baseline.
 struct ElegantDarkGlow: ViewModifier {
 
     var cornerRadius: CGFloat = 100
     var fillColor: Color = Color(red: 0.03, green: 0.03, blue: 0.035)
-    var borderWidth: CGFloat = 2
+    var borderWidth: CGFloat = 1
+    var borderColor: Color = .white.opacity(0.10)
     var glowColor: Color = .white
     var glowRadius: CGFloat = 18
-    var glowOpacity: Double = 0.18
+    var glowOpacity: Double = 0
 
     func body(content: Content) -> some View {
         content
@@ -24,16 +28,7 @@ struct ElegantDarkGlow: ViewModifier {
                             )
                         )
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .strokeBorder(
-                            AngularGradient(
-                                colors: [
-                                    .white.opacity(0.9), .gray.opacity(0.3), .white.opacity(0.1),
-                                    .orange.opacity(0.35), .white.opacity(0.9), .gray.opacity(0.3), .white.opacity(0.9)
-                                ],
-                                center: .center
-                            ),
-                            lineWidth: borderWidth
-                        )
+                        .strokeBorder(borderColor, lineWidth: borderWidth)
                 }
             )
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
@@ -46,30 +41,28 @@ extension View {
     func elegantDarkGlow(
         cornerRadius: CGFloat = 100,
         fillColor: Color = Color(red: 0.03, green: 0.03, blue: 0.035),
-        borderWidth: CGFloat = 2,
+        borderWidth: CGFloat = 1,
+        borderColor: Color = .white.opacity(0.10),
         glowColor: Color = .white,
         glowRadius: CGFloat = 18,
-        glowOpacity: Double = 0.18
+        glowOpacity: Double = 0
     ) -> some View {
         modifier(ElegantDarkGlow(
             cornerRadius: cornerRadius, fillColor: fillColor, borderWidth: borderWidth,
-            glowColor: glowColor, glowRadius: glowRadius, glowOpacity: glowOpacity
+            borderColor: borderColor, glowColor: glowColor, glowRadius: glowRadius, glowOpacity: glowOpacity
         ))
     }
 }
 
-// MARK: - Animated glowing border that traces a rounded-rect
-// perimeter. Shape stays fixed — only the light travels.
-// Driven by elapsed time (not a one-shot animation), so `speed`
-// can change live — e.g. spin faster while "thinking," then ease
-// back to a calm pace once a result lands.
+// MARK: - Kept for later — not currently used anywhere, since the
+// window's animated border was removed. Revisit when redesigning.
 struct AnimatedGlowBorder: View {
 
     var cornerRadius: CGFloat = 20
     var lineWidth: CGFloat = 2.5
     var glowLineWidth: CGFloat = 12
     var glowBlur: CGFloat = 14
-    var speed: Double = 6 // seconds per full revolution — lower = faster
+    var speed: Double = 6
     var colors: [Color] = [
         .white, .gray.opacity(0.3), .white.opacity(0.1),
         .orange.opacity(0.5), .white, .gray.opacity(0.3), .white

@@ -7,12 +7,18 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		845E9385303B2F6200791725 /* ProjectsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 845E9383303B2E5000791725 /* ProjectsView.swift */; };
+		845E9386303B2F6200791725 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 845E9384303B2E6800791725 /* HomeView.swift */; };
+		845E938E303B86C800791725 /* AddProjectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 845E938D303B86C600791725 /* AddProjectView.swift */; };
 		84BD700C30352A6600996BBE /* VisualEffectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84BD700A303518E400996BBE /* VisualEffectView.swift */; };
 		84BD700D30352A6600996BBE /* GlassCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84BD700B303518FF00996BBE /* GlassCard.swift */; };
 		84BD700F3036534400996BBE /* ElegantDark.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84BD700E3036531C00996BBE /* ElegantDark.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		845E9383303B2E5000791725 /* ProjectsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectsView.swift; sourceTree = "<group>"; };
+		845E9384303B2E6800791725 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
+		845E938D303B86C600791725 /* AddProjectView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddProjectView.swift; sourceTree = "<group>"; };
 		84BD6FFB3035179900996BBE /* TaskManager.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TaskManager.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		84BD700A303518E400996BBE /* VisualEffectView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisualEffectView.swift; sourceTree = "<group>"; };
 		84BD700B303518FF00996BBE /* GlassCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassCard.swift; sourceTree = "<group>"; };
@@ -38,12 +44,23 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		845E9382303B2E3200791725 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				845E938D303B86C600791725 /* AddProjectView.swift */,
+				845E9384303B2E6800791725 /* HomeView.swift */,
+				845E9383303B2E5000791725 /* ProjectsView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
 		84BD6FF23035179900996BBE = {
 			isa = PBXGroup;
 			children = (
 				84BD7009303518C500996BBE /* Glass */,
 				84BD6FFD3035179900996BBE /* TaskManager */,
 				84BD6FFC3035179900996BBE /* Products */,
+				845E9382303B2E3200791725 /* Views */,
 			);
 			sourceTree = "<group>";
 		};
@@ -141,6 +158,9 @@
 			files = (
 				84BD700F3036534400996BBE /* ElegantDark.swift in Sources */,
 				84BD700C30352A6600996BBE /* VisualEffectView.swift in Sources */,
+				845E9385303B2F6200791725 /* ProjectsView.swift in Sources */,
+				845E9386303B2F6200791725 /* HomeView.swift in Sources */,
+				845E938E303B86C800791725 /* AddProjectView.swift in Sources */,
 				84BD700D30352A6600996BBE /* GlassCard.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

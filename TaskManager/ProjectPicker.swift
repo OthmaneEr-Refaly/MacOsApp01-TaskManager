@@ -37,26 +37,25 @@ struct RulerTicks: View {
 }
 
 // MARK: - Ruler carousel + "What should I work on next?" trigger.
-// Click spins the ruler right-to-left with real deceleration
-// physics, then settles on a project — the settle IS the reveal.
 struct ProjectPickerRuler: View {
 
     var projects: [Project] = [
-        Project(name: "MyCel"),
-        Project(name: "CodeVisualizer"),
-        Project(name: "BackendRoadmap"),
-        Project(name: "NvimExtensions"),
-        Project(name: "Planora"),
-        Project(name: "one API at a timeh")
+        Project(name: "REDESIGN ONBOARDING"),
+        Project(name: "FIX EXPORT BUG"),
+        Project(name: "CLIENT FOLLOW-UP"),
+        Project(name: "SHIP V1.2"),
+        Project(name: "WRITE DOCS"),
+        Project(name: "REFACTOR API")
     ]
+
+    var onSelect: (Project) -> Void = { _ in }
 
     var itemSpacing: CGFloat = 260
     var visibleRange: Int = 3
 
-    // Continuous position in "item index" space — not necessarily
-    // a whole number while spinning.
     @State private var offset: Double = 0
     @State private var isSpinning = false
+    @State private var hasPickedOnce = false
 
     var body: some View {
         VStack(spacing: 20) {
@@ -68,49 +67,56 @@ struct ProjectPickerRuler: View {
                 RulerTicks(flipped: true)
             }
 
-            Button(action: spin) {
+            LiquidChromeButton(cornerRadius: 22, action: spin) {
                 Text("What should I work on next?")
                     .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(.gray)
+                    .foregroundStyle(.white)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                     .padding(.horizontal, 16)
                     .frame(width: 280, height: 64)
             }
-            .buttonStyle(.plain)
-            .elegantDarkGlow(cornerRadius: 22)
-            .overlay(AnimatedGlowBorder(cornerRadius: 22, speed: isSpinning ? 1.4 : 6))
+            .opacity(isSpinning ? 0.6 : 1)
             .disabled(isSpinning)
         }
     }
 
     private var carousel: some View {
         GeometryReader { geo in
-            ZStack {
-                ForEach(-visibleRange...visibleRange, id: \.self) { k in
-                    let index = Int(offset.rounded()) + k
-                    let project = projectAt(index)
-                    let distance = abs(Double(index) - offset)
-                    let scale = max(0.7, 1 - distance * 0.16)
-                    let opacity = max(0.25, 1 - distance * 0.32)
+            Group {
+                if hasPickedOnce {
+                    ZStack {
+                        ForEach(-visibleRange...visibleRange, id: \.self) { k in
+                            let index = Int(offset.rounded()) + k
+                            let project = projectAt(index)
+                            let distance = abs(Double(index) - offset)
+                            let scale = max(0.7, 1 - distance * 0.16)
+                            let opacity = max(0.25, 1 - distance * 0.32)
 
-                    Text(project.name)
-                        .font(.system(size: 34, weight: .heavy))
-                        .foregroundStyle(.white)
-                        .opacity(opacity)
-                        .scaleEffect(scale)
-                        .lineLimit(1)
-                        .position(
-                            x: geo.size.width / 2 + CGFloat(Double(index) - offset) * itemSpacing,
-                            y: geo.size.height / 2
-                        )
+                            Text(project.name)
+                                .font(.system(size: 34, weight: .heavy))
+                                .foregroundStyle(.white)
+                                .opacity(opacity)
+                                .scaleEffect(scale)
+                                .lineLimit(1)
+                                .position(
+                                    x: geo.size.width / 2 + CGFloat(Double(index) - offset) * itemSpacing,
+                                    y: geo.size.height / 2
+                                )
+                        }
+                    }
+                } else {
+                    Text("Tap below to pick a project")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(.gray.opacity(0.4))
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .position(x: geo.size.width / 2, y: geo.size.height / 2)
                 }
             }
+            .animation(.easeInOut(duration: 0.3), value: hasPickedOnce)
         }
     }
 
-    // Infinite wrap via modulo — no need for the triplicated-array
-    // trick from the React version, SwiftUI can just index forever.
     private func projectAt(_ index: Int) -> Project {
         let count = projects.count
         let wrapped = ((index % count) + count) % count
@@ -120,26 +126,22 @@ struct ProjectPickerRuler: View {
     private func spin() {
         guard !isSpinning, !projects.isEmpty else { return }
         isSpinning = true
+        hasPickedOnce = true
 
         Task {
-            // Randomized initial speed so it doesn't land on the
-            // same relative item every time.
             var velocity = Double.random(in: 14...20)
-            let decayRate = 1.6 // higher = stops sooner
+            let decayRate = 1.6
             var lastTime = CFAbsoluteTimeGetCurrent()
 
-            // Continuous exponential-decay physics loop — true
-            // "flick and slow down" motion, not stepped.
             while abs(velocity) > 0.08 {
                 let now = CFAbsoluteTimeGetCurrent()
                 let dt = now - lastTime
                 lastTime = now
                 velocity *= exp(-decayRate * dt)
                 await MainActor.run { offset += velocity * dt }
-                try? await Task.sleep(nanoseconds: 16_000_000) // ~60fps
+                try? await Task.sleep(nanoseconds: 16_000_000)
             }
 
-            // Clean snap to the nearest whole item to land exactly centered.
             let target = offset.rounded()
             await MainActor.run {
                 withAnimation(.spring(response: 0.45, dampingFraction: 0.75)) {
@@ -147,7 +149,10 @@ struct ProjectPickerRuler: View {
                 }
             }
             try? await Task.sleep(nanoseconds: 300_000_000)
-            await MainActor.run { isSpinning = false }
+            await MainActor.run {
+                isSpinning = false
+                onSelect(projectAt(Int(target)))
+            }
         }
     }
 }

@@ -12,20 +12,47 @@ struct ContentView: View {
 
     var design: WindowDesign = .default
 
-    var body: some View {
-        GeometryReader { geo in
-            ZStack {
-                design.backgroundColor
-                    .ignoresSafeArea()
+    @StateObject private var session = WorkSessionState()
+    @StateObject private var projectsStore = ProjectsStore()
+    @State private var selectedTab: AppTab = .home
 
-                ProjectPickerRuler()
-                    .frame(width: geo.size.width - 80)
-                    // same "slightly above middle" spot as before
-                    .position(x: geo.size.width / 2, y: geo.size.height * 0.42)
+    var body: some View {
+        ZStack {
+            design.backgroundColor
+                .ignoresSafeArea()
+
+            Group {
+                switch selectedTab {
+                case .home:
+                    HomeView(session: session)
+                case .projects:
+                    ProjectsView(store: projectsStore)
+                case .stats:
+                    Text("Charts coming soon")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.gray)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
+
+            VStack {
+                HStack {
+                    Spacer()
+                    TabBar(selected: $selectedTab)
+                    Spacer()
+                }
+                .padding(.top, 34)
+                Spacer()
+            }
+
+            // Full-screen takeover — sits above the tab bar too,
+            // so it genuinely covers the whole window while adding.
+            if projectsStore.isAdding {
+                AddProjectView(store: projectsStore)
             }
         }
         .ignoresSafeArea()
-        .overlay(AnimatedGlowBorder(cornerRadius: design.windowCornerRadius))
+        .animation(.easeInOut(duration: 0.25), value: projectsStore.isAdding)
         .background(WindowChromeSetup())
     }
 }
@@ -52,6 +79,3 @@ struct WindowChromeSetup: NSViewRepresentable {
     ContentView()
         .frame(width: 700, height: 560)
 }
-
-
-
