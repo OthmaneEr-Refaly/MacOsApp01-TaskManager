@@ -1,11 +1,5 @@
 import SwiftUI
 
-// MARK: - Placeholder model — real "what's next" logic comes later.
-struct Project: Identifiable {
-    let id = UUID()
-    let name: String
-}
-
 // MARK: - Ruler tick marks (matches the reference: small ticks,
 // taller every 5th, tallest at dead center).
 struct RulerTicks: View {
@@ -37,18 +31,12 @@ struct RulerTicks: View {
 }
 
 // MARK: - Ruler carousel + "What should I work on next?" trigger.
+// Now driven by real projects from ProjectsStore, weighted by a
+// score combining importance + urgency + estimated time.
 struct ProjectPickerRuler: View {
 
-    var projects: [Project] = [
-        Project(name: "REDESIGN ONBOARDING"),
-        Project(name: "FIX EXPORT BUG"),
-        Project(name: "CLIENT FOLLOW-UP"),
-        Project(name: "SHIP V1.2"),
-        Project(name: "WRITE DOCS"),
-        Project(name: "REFACTOR API")
-    ]
-
-    var onSelect: (Project) -> Void = { _ in }
+    var projects: [ManagedProject]
+    var onSelect: (ManagedProject) -> Void = { _ in }
 
     var itemSpacing: CGFloat = 260
     var visibleRange: Int = 3
@@ -56,6 +44,7 @@ struct ProjectPickerRuler: View {
     @State private var offset: Double = 0
     @State private var isSpinning = false
     @State private var hasPickedOnce = false
+    @State private var reel: [ManagedProject] = []
 
     var body: some View {
         VStack(spacing: 20) {
@@ -68,7 +57,7 @@ struct ProjectPickerRuler: View {
             }
 
             LiquidChromeButton(cornerRadius: 22, action: spin) {
-                Text("What should I work on next?")
+                Text(projects.isEmpty ? "Add a project first" : "What should I work on next?")
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(.white)
                     .lineLimit(1)
@@ -76,15 +65,15 @@ struct ProjectPickerRuler: View {
                     .padding(.horizontal, 16)
                     .frame(width: 280, height: 64)
             }
-            .opacity(isSpinning ? 0.6 : 1)
-            .disabled(isSpinning)
+            .opacity((isSpinning || projects.isEmpty) ? 0.6 : 1)
+            .disabled(isSpinning || projects.isEmpty)
         }
     }
 
     private var carousel: some View {
         GeometryReader { geo in
             Group {
-                if hasPickedOnce {
+                if hasPickedOnce, !reel.isEmpty {
                     ZStack {
                         ForEach(-visibleRange...visibleRange, id: \.self) { k in
                             let index = Int(offset.rounded()) + k
@@ -93,7 +82,7 @@ struct ProjectPickerRuler: View {
                             let scale = max(0.7, 1 - distance * 0.16)
                             let opacity = max(0.25, 1 - distance * 0.32)
 
-                            Text(project.name)
+                            Text(project.name.uppercased())
                                 .font(.system(size: 34, weight: .heavy))
                                 .foregroundStyle(.white)
                                 .opacity(opacity)
@@ -117,14 +106,42 @@ struct ProjectPickerRuler: View {
         }
     }
 
-    private func projectAt(_ index: Int) -> Project {
-        let count = projects.count
+    private func projectAt(_ index: Int) -> ManagedProject {
+        guard !reel.isEmpty else {
+            return ManagedProject(name: "—", estimatedHours: 0, quadrant: .eliminate)
+        }
+        let count = reel.count
         let wrapped = ((index % count) + count) % count
-        return projects[wrapped]
+        return reel[wrapped]
+    }
+
+    // MARK: - Weighted scoring
+    // Do First / Schedule both count as "important"; Do First /
+    // Delegate both count as "urgent". Time favors LONGER tasks,
+    // normalized against a 12h ceiling (matches DurationTickSlider's max).
+    private func score(for project: ManagedProject) -> Double {
+        let important = project.quadrant == .doFirst || project.quadrant == .schedule
+        let urgent = project.quadrant == .doFirst || project.quadrant == .delegate
+        let timeFactor = min(project.estimatedHours, 12) / 12
+        return (important ? 3 : 0) + (urgent ? 3 : 0) + (timeFactor * 2)
+    }
+
+    // Builds a reel where higher-scoring projects appear more times —
+    // proportional odds, not a forced outcome. The existing physics
+    // then runs completely untouched against this reel.
+    private func buildWeightedReel() -> [ManagedProject] {
+        var built: [ManagedProject] = []
+        for project in projects {
+            let weight = score(for: project) + 0.5 // floor so nothing has zero chance
+            let copies = max(1, Int((weight * 3).rounded()))
+            built.append(contentsOf: Array(repeating: project, count: copies))
+        }
+        return built.shuffled()
     }
 
     private func spin() {
         guard !isSpinning, !projects.isEmpty else { return }
+        reel = buildWeightedReel()
         isSpinning = true
         hasPickedOnce = true
 

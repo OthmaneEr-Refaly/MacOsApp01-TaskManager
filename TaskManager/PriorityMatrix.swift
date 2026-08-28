@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum PriorityQuadrant: String, CaseIterable, Identifiable {
+enum PriorityQuadrant: String, CaseIterable, Identifiable, Codable {
     case doFirst = "Do First"
     case schedule = "Schedule"
     case delegate = "Delegate"
@@ -16,8 +16,20 @@ enum PriorityQuadrant: String, CaseIterable, Identifiable {
         case .eliminate: return "Neither"
         }
     }
+
+    var color: Color {
+        switch self {
+        case .doFirst: return .red
+        case .schedule: return .blue
+        case .delegate: return .yellow
+        case .eliminate: return .gray
+        }
+    }
 }
 
+// NOTE: the grid-of-4-cells UI below is no longer used anywhere
+// (replaced by PriorityCross) — left in place only because
+// PriorityQuadrant above is still a live dependency elsewhere.
 struct PriorityMatrix: View {
     @Binding var selected: PriorityQuadrant?
 
@@ -50,7 +62,6 @@ struct PriorityMatrix: View {
                 .foregroundStyle(.gray)
         }
         .frame(maxWidth: .infinity, minHeight: 64)
-        // Flat — selection is shown by text color + border width only.
         .elegantDarkGlow(
             cornerRadius: 14,
             borderWidth: isSelected ? 2 : 1,
