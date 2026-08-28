@@ -1,10 +1,3 @@
-//
-//  DurationTickSlider.swift
-//  TaskManager
-//
-//  Created by Admin on 23/8/2026.
-//
-
 import SwiftUI
 
 struct DurationTickSlider: View {
@@ -12,13 +5,17 @@ struct DurationTickSlider: View {
     var maxHours: Double = 12
     var step: Double = 0.5
 
-    private let tickCount = 48
+    var tickCount: Int = 48
+    var filledTickHeight: CGFloat = 26
+    var unfilledTickHeight: CGFloat = 16
+    var barHeight: CGFloat = 30
+    var readoutFontSize: CGFloat = 26
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             tickBar
             Text(formatted(hours))
-                .font(.system(size: 26, weight: .bold, design: .rounded))
+                .font(.system(size: readoutFontSize, weight: .bold, design: .rounded))
                 .foregroundStyle(.orange)
         }
     }
@@ -35,27 +32,34 @@ struct DurationTickSlider: View {
                     RoundedRectangle(cornerRadius: 2)
                         .fill(
                             isFilled
-                                ? AnyShapeStyle(
-                                    LinearGradient(colors: [.orange, .orange.opacity(0.6)],
-                                                   startPoint: .top, endPoint: .bottom)
-                                  )
+                                ? AnyShapeStyle(LinearGradient(colors: [.orange, .orange.opacity(0.6)],
+                                                                startPoint: .top, endPoint: .bottom))
                                 : AnyShapeStyle(Color.white.opacity(0.15))
                         )
-                        .frame(width: tickWidth, height: isFilled ? 26 : 16)
+                        .frame(width: tickWidth, height: isFilled ? filledTickHeight : unfilledTickHeight)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 0)
+            // highPriorityGesture — on macOS a plain Shape-based drag
+            // target can lose continued mouse-dragged tracking to the
+            // window's own move-by-background behavior after the
+            // initial click. This forces SwiftUI's gesture to win.
+            .highPriorityGesture(
+                DragGesture(minimumDistance: 0, coordinateSpace: .local)
                     .onChanged { value in
+                        let fraction = min(max(value.location.x / geo.size.width, 0), 1)
+                        let raw = fraction * maxHours
+                        hours = (raw / step).rounded() * step
+                    }
+                    .onEnded { value in
                         let fraction = min(max(value.location.x / geo.size.width, 0), 1)
                         let raw = fraction * maxHours
                         hours = (raw / step).rounded() * step
                     }
             )
         }
-        .frame(height: 30)
+        .frame(height: barHeight)
     }
 
     private func formatted(_ h: Double) -> String {

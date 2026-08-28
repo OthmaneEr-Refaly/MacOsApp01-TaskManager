@@ -1,6 +1,5 @@
 import SwiftUI
 
-// MARK: - Everything you'd want to tweak lives here.
 struct WindowDesign {
     var backgroundColor: Color = Color(red: 0.05, green: 0.05, blue: 0.06)
     var windowCornerRadius: CGFloat = 12
@@ -24,14 +23,11 @@ struct ContentView: View {
             Group {
                 switch selectedTab {
                 case .home:
-                    HomeView(session: session)
+                    HomeView(session: session, projectsStore: projectsStore)
                 case .projects:
                     ProjectsView(store: projectsStore)
                 case .stats:
-                    Text("Charts coming soon")
-                        .font(.system(size: 14))
-                        .foregroundStyle(.gray)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    StatsView()
                 }
             }
 
@@ -45,19 +41,16 @@ struct ContentView: View {
                 Spacer()
             }
 
-            // Full-screen takeover — sits above the tab bar too,
-            // so it genuinely covers the whole window while adding.
-            if projectsStore.isAdding {
+            if projectsStore.formMode != nil {
                 AddProjectView(store: projectsStore)
             }
         }
         .ignoresSafeArea()
-        .animation(.easeInOut(duration: 0.25), value: projectsStore.isAdding)
+        .animation(.easeInOut(duration: 0.25), value: projectsStore.formMode != nil)
         .background(WindowChromeSetup())
     }
 }
 
-// MARK: - Transparent titlebar, native buttons kept, window opaque.
 struct WindowChromeSetup: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
