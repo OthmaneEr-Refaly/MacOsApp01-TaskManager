@@ -1,10 +1,3 @@
-//
-//  WorkStat.swift
-//  TaskManager
-//
-//  Created by Admin on 24/8/2026.
-//
-
 import Foundation
 
 struct DailyWorkStat: Identifiable {
@@ -13,18 +6,48 @@ struct DailyWorkStat: Identifiable {
     let hours: Double
 }
 
-// Placeholder data — real session-logging comes later. This just
-// lets us build and judge the chart's look now.
-enum SampleWorkData {
-    static func lastSevenDays() -> [DailyWorkStat] {
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
-        let sampleHours: [Double] = [2.5, 4.0, 1.0, 5.5, 3.0, 0.5, 6.0] // oldest -> today
+enum WorkStatsAggregator {
 
-        return sampleHours.enumerated().map { index, hours in
-            let dayOffset = -(sampleHours.count - 1 - index)
-            let date = calendar.date(byAdding: .day, value: dayOffset, to: today)!
-            return DailyWorkStat(date: date, hours: hours)
+    // Builds the last `days` daily buckets from real session
+    // history. A session crossing midnight contributes its real
+    // overlap seconds to each calendar day it touches — computed
+    // here at query time, never stored pre-split.
+    static func aggregate(
+        from sessions: [HistoricalSession],
+        days: Int = 7,
+        calendar: Calendar = .current
+    ) -> [DailyWorkStat] {
+        let today = calendar.startOfDay(for: Date())
+        let dayStarts: [Date] = (0..<days).map { offset in
+            calendar.date(byAdding: .day, value: -(days - 1 - offset), to: today)!
         }
+
+        var totals: [Date: Int] = [:]
+        for dayStart in dayStarts { totals[dayStart] = 0 }
+
+        for session in sessions {
+            for dayStart in dayStarts {
+                let seconds = overlapSeconds(of: session, withDayStarting: dayStart, calendar: calendar)
+                if seconds > 0 {
+                    totals[dayStart, default: 0] += seconds
+                }
+            }
+        }
+
+        return dayStarts.map { dayStart in
+            DailyWorkStat(date: dayStart, hours: Double(totals[dayStart] ?? 0) / 3600.0)
+        }
+    }
+
+    private static func overlapSeconds(
+        of session: HistoricalSession,
+        withDayStarting dayStart: Date,
+        calendar: Calendar
+    ) -> Int {
+        let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart)!
+        let overlapStart = max(session.startedAt, dayStart)
+        let overlapEnd = min(session.endedAt, dayEnd)
+        guard overlapEnd > overlapStart else { return 0 }
+        return Int(overlapEnd.timeIntervalSince(overlapStart))
     }
 }

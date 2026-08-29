@@ -1,11 +1,9 @@
 import SwiftUI
 
-// MARK: - Bottom-right: single Start/Pause toggle + Stop.
-// Flat now — active/inactive is shown only by icon tint, no glow
-// or hover state.
 struct SessionControls: View {
 
     @ObservedObject var session: WorkSessionState
+    @State private var showDiscardConfirm = false
 
     var body: some View {
         HStack(spacing: 12) {
@@ -17,12 +15,33 @@ struct SessionControls: View {
                 session.toggleRunPause()
             }
 
+            // Primary end action — commits the session to history.
             ControlIconButton(
-                systemImage: "stop.fill",
+                systemImage: "checkmark",
+                tint: .green,
+                active: session.hasProject
+            ) {
+                session.finish()
+            }
+
+            // Secondary, destructive — requires confirmation since
+            // it throws the time away with no history record.
+            ControlIconButton(
+                systemImage: "trash",
                 tint: .red,
                 active: session.hasProject
             ) {
-                session.stop()
+                showDiscardConfirm = true
+            }
+            .confirmationDialog(
+                "Discard this session? The time won't be recorded.",
+                isPresented: $showDiscardConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Discard Session", role: .destructive) {
+                    session.discard()
+                }
+                Button("Cancel", role: .cancel) {}
             }
         }
     }
