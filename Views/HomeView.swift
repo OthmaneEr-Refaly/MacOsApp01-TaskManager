@@ -11,7 +11,9 @@ struct HomeView: View {
             ZStack {
                 ProjectPickerRuler(
                     projects: projectsStore.projects,
-                    onSelect: { project in
+                    hasActiveSession: session.hasProject,
+                    activeProjectName: session.selectedProject?.name,
+                    onStart: { project in
                         session.select(project)
                     }
                 )

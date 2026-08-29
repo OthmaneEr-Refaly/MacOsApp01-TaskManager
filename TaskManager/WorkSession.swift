@@ -9,14 +9,22 @@ final class WorkSessionState: ObservableObject {
 
     private var accumulatedSeconds: Int = 0
     private var runStartDate: Date? = nil
+    private var sessionStartedAt: Date? = nil
+
+    private let historyStore: SessionHistoryStore
+
+    init(historyStore: SessionHistoryStore) {
+        self.historyStore = historyStore
+    }
 
     var hasProject: Bool { selectedProject != nil }
 
     func select(_ project: ManagedProject) {
         selectedProject = project
-        isRunning = false
         accumulatedSeconds = 0
-        runStartDate = nil
+        isRunning = true
+        runStartDate = Date()
+        sessionStartedAt = Date()
     }
 
     func toggleRunPause() {
@@ -30,12 +38,30 @@ final class WorkSessionState: ObservableObject {
         }
     }
 
-    func stop() {
+    // Commits the session to history and ends it — works whether
+    // currently running or paused. Zero-duration sessions (picked
+    // a project, immediately finished) create no history record.
+    func finish() {
         commitElapsed()
         isRunning = false
-        // Next step: log (selectedProject, accumulatedSeconds, Date())
-        // to session history before resetting.
-        accumulatedSeconds = 0
+
+        if let project = selectedProject, let startedAt = sessionStartedAt, accumulatedSeconds > 0 {
+            historyStore.append(HistoricalSession(
+                projectID: project.id,
+                projectNameSnapshot: project.name,
+                startedAt: startedAt,
+                endedAt: Date(),
+                durationSeconds: accumulatedSeconds
+            ))
+        }
+        reset()
+    }
+
+    // Throws the session away entirely — no history record no
+    // matter how much time had accumulated. The caller is
+    // responsible for confirming this with the user first.
+    func discard() {
+        reset()
     }
 
     func currentElapsed(at date: Date) -> Int {
@@ -50,5 +76,13 @@ final class WorkSessionState: ObservableObject {
             accumulatedSeconds += Int(Date().timeIntervalSince(start))
         }
         runStartDate = nil
+    }
+
+    private func reset() {
+        accumulatedSeconds = 0
+        isRunning = false
+        runStartDate = nil
+        sessionStartedAt = nil
+        selectedProject = nil
     }
 }

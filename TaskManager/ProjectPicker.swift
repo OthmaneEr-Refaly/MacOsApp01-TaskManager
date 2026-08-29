@@ -1,7 +1,6 @@
 import SwiftUI
 
-// MARK: - Ruler tick marks (matches the reference: small ticks,
-// taller every 5th, tallest at dead center).
+// MARK: - Ruler tick marks (unchanged).
 struct RulerTicks: View {
     var totalLines: Int = 60
     var flipped: Bool = false
@@ -30,13 +29,17 @@ struct RulerTicks: View {
     }
 }
 
-// MARK: - Ruler carousel + "What should I work on next?" trigger.
-// Now driven by real projects from ProjectsStore, weighted by a
-// score combining importance + urgency + estimated time.
+// MARK: - Ruler carousel + picker. Now a real state machine:
+// idle -> spinning -> recommended (holds until Start or Choose
+// Another) -> (Start) hands off to the caller. Locks entirely
+// while a session is already active, so it can never silently
+// swap the project underneath a running/paused timer.
 struct ProjectPickerRuler: View {
 
     var projects: [ManagedProject]
-    var onSelect: (ManagedProject) -> Void = { _ in }
+    var hasActiveSession: Bool
+    var activeProjectName: String?
+    var onStart: (ManagedProject) -> Void = { _ in }
 
     var itemSpacing: CGFloat = 260
     var visibleRange: Int = 3
@@ -45,6 +48,13 @@ struct ProjectPickerRuler: View {
     @State private var isSpinning = false
     @State private var hasPickedOnce = false
     @State private var reel: [ManagedProject] = []
+    @State private var recommendation: ManagedProject? = nil
+
+    // Eliminate-quadrant projects are never auto-recommended —
+    // that quadrant means "don't do this," by definition.
+    private var eligibleProjects: [ManagedProject] {
+        projects.filter { $0.quadrant != .eliminate }
+    }
 
     var body: some View {
         VStack(spacing: 20) {
@@ -56,8 +66,44 @@ struct ProjectPickerRuler: View {
                 RulerTicks(flipped: true)
             }
 
+            controls
+        }
+    }
+
+    @ViewBuilder
+    private var controls: some View {
+        if hasActiveSession {
+            Text("Currently working on \(activeProjectName ?? "")")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(.orange)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .padding(.horizontal, 20)
+                .frame(width: 280, height: 64)
+                .elegantDarkGlow(cornerRadius: 22, glowOpacity: 0)
+        } else if let recommendation {
+            HStack(spacing: 12) {
+                Button(action: reroll) {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 44, height: 44)
+                }
+                .buttonStyle(.plain)
+                .elegantDarkGlow(cornerRadius: 22, glowOpacity: 0)
+                .disabled(isSpinning)
+
+                LiquidChromeButton(cornerRadius: 22, action: { start(recommendation) }) {
+                    Text("Start Working")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(.white)
+                        .frame(width: 210, height: 64)
+                }
+                .disabled(isSpinning)
+            }
+        } else {
             LiquidChromeButton(cornerRadius: 22, action: spin) {
-                Text(projects.isEmpty ? "Add a project first" : "What should I work on next?")
+                Text(eligibleProjects.isEmpty ? "Add a project first" : "What should I work on next?")
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(.white)
                     .lineLimit(1)
@@ -65,8 +111,8 @@ struct ProjectPickerRuler: View {
                     .padding(.horizontal, 16)
                     .frame(width: 280, height: 64)
             }
-            .opacity((isSpinning || projects.isEmpty) ? 0.6 : 1)
-            .disabled(isSpinning || projects.isEmpty)
+            .opacity((isSpinning || eligibleProjects.isEmpty) ? 0.6 : 1)
+            .disabled(isSpinning || eligibleProjects.isEmpty)
         }
     }
 
@@ -115,10 +161,6 @@ struct ProjectPickerRuler: View {
         return reel[wrapped]
     }
 
-    // MARK: - Weighted scoring
-    // Do First / Schedule both count as "important"; Do First /
-    // Delegate both count as "urgent". Time favors LONGER tasks,
-    // normalized against a 12h ceiling (matches DurationTickSlider's max).
     private func score(for project: ManagedProject) -> Double {
         let important = project.quadrant == .doFirst || project.quadrant == .schedule
         let urgent = project.quadrant == .doFirst || project.quadrant == .delegate
@@ -126,24 +168,36 @@ struct ProjectPickerRuler: View {
         return (important ? 3 : 0) + (urgent ? 3 : 0) + (timeFactor * 2)
     }
 
-    // Builds a reel where higher-scoring projects appear more times —
-    // proportional odds, not a forced outcome. The existing physics
-    // then runs completely untouched against this reel.
     private func buildWeightedReel() -> [ManagedProject] {
         var built: [ManagedProject] = []
-        for project in projects {
-            let weight = score(for: project) + 0.5 // floor so nothing has zero chance
+        for project in eligibleProjects {
+            let weight = score(for: project) + 0.5
             let copies = max(1, Int((weight * 3).rounded()))
             built.append(contentsOf: Array(repeating: project, count: copies))
         }
         return built.shuffled()
     }
 
+    // Explicit reroll — discards the current recommendation and
+    // spins again. Never happens implicitly.
+    private func reroll() {
+        recommendation = nil
+        spin()
+    }
+
+    // Accepting a recommendation hands it to the caller (which
+    // starts the actual session) and clears local picker state.
+    private func start(_ project: ManagedProject) {
+        onStart(project)
+        recommendation = nil
+    }
+
     private func spin() {
-        guard !isSpinning, !projects.isEmpty else { return }
+        guard !isSpinning, !eligibleProjects.isEmpty else { return }
         reel = buildWeightedReel()
         isSpinning = true
         hasPickedOnce = true
+        recommendation = nil
 
         Task {
             var velocity = Double.random(in: 14...20)
@@ -168,7 +222,8 @@ struct ProjectPickerRuler: View {
             try? await Task.sleep(nanoseconds: 300_000_000)
             await MainActor.run {
                 isSpinning = false
-                onSelect(projectAt(Int(target)))
+                // Holds as a recommendation — does NOT commit yet.
+                recommendation = projectAt(Int(target))
             }
         }
     }

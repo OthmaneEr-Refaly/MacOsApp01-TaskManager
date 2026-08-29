@@ -9,11 +9,19 @@ struct WindowDesign {
 
 struct ContentView: View {
 
-    var design: WindowDesign = .default
+    var design: WindowDesign
 
-    @StateObject private var session = WorkSessionState()
+    @StateObject private var session: WorkSessionState
+    @StateObject private var historyStore: SessionHistoryStore
     @StateObject private var projectsStore = ProjectsStore()
     @State private var selectedTab: AppTab = .home
+
+    init(design: WindowDesign = .default) {
+        self.design = design
+        let history = SessionHistoryStore()
+        _historyStore = StateObject(wrappedValue: history)
+        _session = StateObject(wrappedValue: WorkSessionState(historyStore: history))
+    }
 
     var body: some View {
         ZStack {
@@ -27,7 +35,7 @@ struct ContentView: View {
                 case .projects:
                     ProjectsView(store: projectsStore)
                 case .stats:
-                    StatsView()
+                    StatsView(historyStore: historyStore)
                 }
             }
 
