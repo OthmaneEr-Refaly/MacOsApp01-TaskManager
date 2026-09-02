@@ -1,16 +1,9 @@
-//
-//  JSONFileStore.swift
-//  TaskManager
-//
-//  Created by Admin on 27/8/2026.
-//
-
 import Foundation
 
 // MARK: - Generic JSON-file persistence for any Codable value.
-// One small, inspectable mechanism — used by ProjectsStore now,
-// and by session history later, instead of scattering File I/O
-// logic across multiple stores.
+// One small, inspectable mechanism — used by ProjectsStore,
+// SessionHistoryStore, and now WorkSessionState's crash-recovery
+// snapshot, instead of scattering File I/O logic everywhere.
 enum JSONFileStore {
 
     private static func url(for filename: String) -> URL {
@@ -35,5 +28,10 @@ enum JSONFileStore {
         let fileURL = url(for: filename)
         guard let data = try? JSONEncoder().encode(value) else { return }
         try? data.write(to: fileURL, options: .atomic)
+    }
+
+    static func delete(_ filename: String) {
+        let fileURL = url(for: filename)
+        try? FileManager.default.removeItem(at: fileURL)
     }
 }

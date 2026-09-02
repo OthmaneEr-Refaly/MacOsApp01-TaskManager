@@ -9,19 +9,12 @@ struct WindowDesign {
 
 struct ContentView: View {
 
-    var design: WindowDesign
+    var design: WindowDesign = .default
 
-    @StateObject private var session: WorkSessionState
-    @StateObject private var historyStore: SessionHistoryStore
+    @ObservedObject var session: WorkSessionState
+    @ObservedObject var historyStore: SessionHistoryStore
     @StateObject private var projectsStore = ProjectsStore()
     @State private var selectedTab: AppTab = .home
-
-    init(design: WindowDesign = .default) {
-        self.design = design
-        let history = SessionHistoryStore()
-        _historyStore = StateObject(wrappedValue: history)
-        _session = StateObject(wrappedValue: WorkSessionState(historyStore: history))
-    }
 
     var body: some View {
         ZStack {
@@ -50,7 +43,16 @@ struct ContentView: View {
             }
 
             if projectsStore.formMode != nil {
-                AddProjectView(store: projectsStore)
+                AddProjectView(store: projectsStore, session: session, selectedTab: $selectedTab)
+            }
+        }
+        .overlay(alignment: .topTrailing) {
+            if selectedTab != .home {
+                ActiveSessionIndicator(session: session) {
+                    selectedTab = .home
+                }
+                .padding(.top, 34)
+                .padding(.trailing, 24)
             }
         }
         .ignoresSafeArea()
@@ -77,6 +79,7 @@ struct WindowChromeSetup: NSViewRepresentable {
 }
 
 #Preview {
-    ContentView()
+    let history = SessionHistoryStore()
+    ContentView(session: WorkSessionState(historyStore: history), historyStore: history)
         .frame(width: 700, height: 560)
 }
