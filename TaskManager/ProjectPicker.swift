@@ -53,7 +53,7 @@ struct ProjectPickerRuler: View {
     // Eliminate-quadrant projects are never auto-recommended —
     // that quadrant means "don't do this," by definition.
     private var eligibleProjects: [ManagedProject] {
-        projects.filter { $0.quadrant != .eliminate }
+        projects.filter { $0.quadrant != .eliminate && $0.status == .active }
     }
 
     var body: some View {

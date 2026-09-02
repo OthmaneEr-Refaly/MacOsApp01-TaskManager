@@ -1,6 +1,18 @@
 import SwiftUI
 import Combine
 
+// A tiny snapshot written on every transition — start/pause/resume —
+// not every tick. Recovery works because currentElapsed(at:) already
+// computes from real timestamps, so restoring these same fields
+// after a crash produces the exact correct elapsed time for free.
+private struct PersistedActiveSession: Codable {
+    var project: ManagedProject
+    var sessionStartedAt: Date
+    var accumulatedSeconds: Int
+    var runStartDate: Date?
+    var isRunning: Bool
+}
+
 @MainActor
 final class WorkSessionState: ObservableObject {
 
@@ -12,9 +24,11 @@ final class WorkSessionState: ObservableObject {
     private var sessionStartedAt: Date? = nil
 
     private let historyStore: SessionHistoryStore
+    private let activeSessionFilename = "activeSession.json"
 
     init(historyStore: SessionHistoryStore) {
         self.historyStore = historyStore
+        restoreActiveSessionIfNeeded()
     }
 
     var hasProject: Bool { selectedProject != nil }
@@ -25,6 +39,7 @@ final class WorkSessionState: ObservableObject {
         isRunning = true
         runStartDate = Date()
         sessionStartedAt = Date()
+        persistActiveSession()
     }
 
     func toggleRunPause() {
@@ -36,11 +51,9 @@ final class WorkSessionState: ObservableObject {
             runStartDate = Date()
             isRunning = true
         }
+        persistActiveSession()
     }
 
-    // Commits the session to history and ends it — works whether
-    // currently running or paused. Zero-duration sessions (picked
-    // a project, immediately finished) create no history record.
     func finish() {
         commitElapsed()
         isRunning = false
@@ -57,9 +70,6 @@ final class WorkSessionState: ObservableObject {
         reset()
     }
 
-    // Throws the session away entirely — no history record no
-    // matter how much time had accumulated. The caller is
-    // responsible for confirming this with the user first.
     func discard() {
         reset()
     }
@@ -84,5 +94,29 @@ final class WorkSessionState: ObservableObject {
         runStartDate = nil
         sessionStartedAt = nil
         selectedProject = nil
+        JSONFileStore.delete(activeSessionFilename)
+    }
+
+    // MARK: - Crash / force-quit recovery
+
+    private func persistActiveSession() {
+        guard let project = selectedProject, let sessionStartedAt else { return }
+        let record = PersistedActiveSession(
+            project: project,
+            sessionStartedAt: sessionStartedAt,
+            accumulatedSeconds: accumulatedSeconds,
+            runStartDate: runStartDate,
+            isRunning: isRunning
+        )
+        JSONFileStore.save(record, to: activeSessionFilename)
+    }
+
+    private func restoreActiveSessionIfNeeded() {
+        guard let record = JSONFileStore.load(PersistedActiveSession.self, from: activeSessionFilename) else { return }
+        selectedProject = record.project
+        sessionStartedAt = record.sessionStartedAt
+        accumulatedSeconds = record.accumulatedSeconds
+        runStartDate = record.runStartDate
+        isRunning = record.isRunning
     }
 }

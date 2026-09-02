@@ -2,6 +2,8 @@ import SwiftUI
 
 struct AddProjectView: View {
     @ObservedObject var store: ProjectsStore
+    @ObservedObject var session: WorkSessionState
+    @Binding var selectedTab: AppTab
 
     @State private var draftName: String
     @State private var draftHours: Double
@@ -14,8 +16,22 @@ struct AddProjectView: View {
     }
     private var isEditing: Bool { editingProject != nil }
 
-    init(store: ProjectsStore) {
+    // Blocks Complete/Archive on THIS project specifically.
+    private var isThisProjectActiveInSession: Bool {
+        guard let editingProject else { return false }
+        return session.selectedProject?.id == editingProject.id
+    }
+
+    // Blocks "Work on This Now" — ANY active session (on any
+    // project) blocks starting a new one. One session at a time.
+    private var canStartWorkingNow: Bool {
+        isEditing && !session.hasProject && editingProject?.status == .active
+    }
+
+    init(store: ProjectsStore, session: WorkSessionState, selectedTab: Binding<AppTab>) {
         self.store = store
+        self.session = session
+        self._selectedTab = selectedTab
 
         if case .edit(let project) = store.formMode {
             _draftName = State(initialValue: project.name)
@@ -78,31 +94,85 @@ struct AddProjectView: View {
                     )
                     .frame(width: geo.size.width - 260)
 
-                    HStack(spacing: 16) {
-                        if isEditing {
-                            Button("Delete", action: delete)
-                                .buttonStyle(.plain)
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(.red)
-                                .padding(.horizontal, 20)
-                                .padding(.vertical, 12)
-                                .elegantDarkGlow(cornerRadius: 20, glowOpacity: 0)
-                        }
+                    statusGuardMessages(width: geo.size.width - 160)
 
-                        LiquidChromeButton(cornerRadius: 22, action: save) {
-                            Text(isEditing ? "Save Changes" : "Save Project")
+                    if isEditing && canStartWorkingNow {
+                        LiquidChromeButton(cornerRadius: 22, action: workOnThisNow) {
+                            Text("Work on This Now")
                                 .font(.system(size: 15, weight: .medium))
                                 .foregroundStyle(.white)
-                                .frame(width: 200, height: 56)
+                                .frame(width: 220, height: 56)
                         }
-                        .opacity(canSave ? 1 : 0.35)
-                        .disabled(!canSave)
                     }
+
+                    actionRow
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .transition(.opacity)
+    }
+
+    @ViewBuilder
+    private func statusGuardMessages(width: CGFloat) -> some View {
+        if isEditing && isThisProjectActiveInSession {
+            Text("You're currently working on this project. Finish or discard the session to change its status.")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.gray)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: width)
+        } else if isEditing && session.hasProject && !isThisProjectActiveInSession {
+            Text("Finish or discard your session on \"\(session.selectedProject?.name ?? "")\" before starting work on a different project.")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.gray)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: width)
+        }
+    }
+
+    private var actionRow: some View {
+        HStack(spacing: 16) {
+            if isEditing {
+                if editingProject?.status == .active {
+                    Button("Archive", action: archive)
+                        .buttonStyle(.plain)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.red)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 12)
+                        .elegantDarkGlow(cornerRadius: 20, glowOpacity: 0)
+                        .disabled(isThisProjectActiveInSession)
+                        .opacity(isThisProjectActiveInSession ? 0.35 : 1)
+
+                    Button("Complete", action: complete)
+                        .buttonStyle(.plain)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.green)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 12)
+                        .elegantDarkGlow(cornerRadius: 20, glowOpacity: 0)
+                        .disabled(isThisProjectActiveInSession)
+                        .opacity(isThisProjectActiveInSession ? 0.35 : 1)
+                } else {
+                    Button("Reactivate", action: reactivate)
+                        .buttonStyle(.plain)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.orange)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 12)
+                        .elegantDarkGlow(cornerRadius: 20, glowOpacity: 0)
+                }
+            }
+
+            LiquidChromeButton(cornerRadius: 22, action: save) {
+                Text(isEditing ? "Save Changes" : "Save Project")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(.white)
+                    .frame(width: 200, height: 56)
+            }
+            .opacity(canSave ? 1 : 0.35)
+            .disabled(!canSave)
+        }
     }
 
     private var closeButton: some View {
@@ -137,7 +207,8 @@ struct AddProjectView: View {
                 id: existing.id,
                 name: draftName,
                 estimatedHours: draftHours,
-                quadrant: quadrant
+                quadrant: quadrant,
+                status: existing.status
             ))
         } else {
             store.add(ManagedProject(name: draftName, estimatedHours: draftHours, quadrant: quadrant))
@@ -146,9 +217,30 @@ struct AddProjectView: View {
         store.formMode = nil
     }
 
-    private func delete() {
-        guard let existing = editingProject else { return }
-        store.delete(existing)
+    private func archive() {
+        guard let existing = editingProject, !isThisProjectActiveInSession else { return }
+        store.archive(existing)
         store.formMode = nil
+    }
+
+    private func complete() {
+        guard let existing = editingProject, !isThisProjectActiveInSession else { return }
+        store.complete(existing)
+        store.formMode = nil
+    }
+
+    private func reactivate() {
+        guard let existing = editingProject else { return }
+        store.reactivate(existing)
+        store.formMode = nil
+    }
+
+    // Bypasses the picker entirely — same effect as accepting a
+    // recommendation, just chosen directly by the user.
+    private func workOnThisNow() {
+        guard let existing = editingProject, !session.hasProject else { return }
+        session.select(existing)
+        store.formMode = nil
+        selectedTab = .home
     }
 }

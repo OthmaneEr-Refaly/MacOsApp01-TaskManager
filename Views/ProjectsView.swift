@@ -1,14 +1,26 @@
 import SwiftUI
 
+enum ProjectFilter: String, CaseIterable {
+    case active = "Active"
+    case completed = "Completed"
+    case archived = "Archived"
+}
+
 struct ProjectsView: View {
     @ObservedObject var store: ProjectsStore
 
-    // Drives the staggered entrance — starts false, flips true
-    // shortly after appearing so SwiftUI actually animates the
-    // transition instead of rendering straight into the end state.
     @State private var appeared = false
+    @State private var filter: ProjectFilter = .active
 
     private let columns = [GridItem(.adaptive(minimum: 90, maximum: 110), spacing: 20)]
+
+    private var filteredProjects: [ManagedProject] {
+        switch filter {
+        case .active: return store.projects.filter { $0.status == .active }
+        case .completed: return store.projects.filter { $0.status == .completed }
+        case .archived: return store.projects.filter { $0.status == .archived }
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -20,8 +32,10 @@ struct ProjectsView: View {
                 addButton
             }
 
-            if store.projects.isEmpty {
-                Text("No projects yet — tap + to add one.")
+            filterRow
+
+            if filteredProjects.isEmpty {
+                Text(emptyMessage)
                     .font(.system(size: 14))
                     .foregroundStyle(.gray)
                     .frame(maxWidth: .infinity, alignment: .center)
@@ -30,7 +44,7 @@ struct ProjectsView: View {
 
             ScrollView {
                 LazyVGrid(columns: columns, spacing: 24) {
-                    ForEach(Array(store.projects.enumerated()), id: \.element.id) { index, project in
+                    ForEach(Array(filteredProjects.enumerated()), id: \.element.id) { index, project in
                         FolderTile(project: project) {
                             store.formMode = .edit(project)
                         }
@@ -52,6 +66,40 @@ struct ProjectsView: View {
                 appeared = true
             }
         }
+        .onChange(of: filter) { _, _ in
+            appeared = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) {
+                appeared = true
+            }
+        }
+    }
+
+    private var emptyMessage: String {
+        switch filter {
+        case .active: return "No projects yet — tap + to add one."
+        case .completed: return "No completed projects yet."
+        case .archived: return "No archived projects."
+        }
+    }
+
+    private var filterRow: some View {
+        HStack(spacing: 8) {
+            ForEach(ProjectFilter.allCases, id: \.self) { option in
+                Button(action: { filter = option }) {
+                    Text(option.rawValue)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(filter == option ? .white : .gray)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 7)
+                }
+                .buttonStyle(.plain)
+                .elegantDarkGlow(
+                    cornerRadius: 14,
+                    borderWidth: filter == option ? 1.5 : 1,
+                    glowOpacity: 0
+                )
+            }
+        }
     }
 
     private var addButton: some View {
@@ -66,21 +114,28 @@ struct ProjectsView: View {
     }
 }
 
-// MARK: - A single folder tile with its own hover state (needs a
-// dedicated view struct since @State can't live inside a function).
 private struct FolderTile: View {
     let project: ManagedProject
     let action: () -> Void
 
     @State private var isHovering = false
 
+    private var tintColor: Color {
+        switch project.status {
+        case .completed: return .green
+        case .archived: return .gray
+        default: return project.quadrant.color
+        }
+    }
+
     var body: some View {
         Button(action: action) {
             VStack(spacing: 8) {
                 Image(systemName: "folder.fill")
                     .font(.system(size: 46))
-                    .foregroundStyle(project.quadrant.color)
-                    .shadow(color: isHovering ? project.quadrant.color.opacity(0.5) : .clear, radius: 10)
+                    .foregroundStyle(tintColor)
+                    .opacity(project.status == .archived ? 0.55 : 1)
+                    .shadow(color: isHovering ? tintColor.opacity(0.5) : .clear, radius: 10)
 
                 Text(project.name)
                     .font(.system(size: 12, weight: .medium))
