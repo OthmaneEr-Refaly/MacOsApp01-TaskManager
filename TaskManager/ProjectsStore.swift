@@ -109,16 +109,96 @@ final class ProjectsStore: ObservableObject {
 
     init() {
         self.projects = JSONFileStore.load([ManagedProject].self, from: filename) ?? []
+        normalizeDuplicateNames()
         refreshSnoozeExpirations()
     }
 
+    // MARK: - Duplicate-name handling (auto-suffix)
+
+    /// Returns a name guaranteed unique (case-insensitive) among all
+    /// projects except `excludingID`. Trims whitespace; if `desired`
+    /// is taken, appends/increments " (2)", " (3)", ...
+    /// e.g. "Website" -> "Website (2)" -> "Website (3)".
+    func uniqueName(for desired: String, excludingID: UUID? = nil) -> String {
+        let trimmed = desired.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return trimmed }
+
+        var taken = Set<String>()
+        for p in projects where p.id != excludingID {
+            taken.insert(p.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())
+        }
+
+        if !taken.contains(trimmed.lowercased()) {
+            return trimmed
+        }
+
+        let root = ProjectsStore.strippingSuffix(from: trimmed)
+        var n = 2
+        while taken.contains("\(root) (\(n))".lowercased()) {
+            n += 1
+        }
+        return "\(root) (\(n))"
+    }
+
+    /// Strips a trailing " (N)" so "Website (2)" -> "Website",
+    /// avoiding ugly "Website (2) (2)" chains.
+    private static func strippingSuffix(from name: String) -> String {
+        guard name.hasSuffix(")"),
+              let openRange = name.range(of: " (", options: .backwards) else {
+            return name
+        }
+        let afterOpen = name[openRange.upperBound...] // e.g. "2)"
+        guard afterOpen.hasSuffix(")"), afterOpen.count >= 2 else { return name }
+        let numberPart = afterOpen.dropLast()
+        guard !numberPart.isEmpty, numberPart.allSatisfy({ $0.isNumber }) else { return name }
+        let root = String(name[..<openRange.lowerBound])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !root.isEmpty else { return name }
+        return root
+    }
+
+    /// One-time repair for duplicates created before auto-suffix
+    /// existed: keeps the first occurrence's name, renames later
+    /// ones in load order. Persists only if something changed.
+    private func normalizeDuplicateNames() {
+        var seen = Set<String>()
+        var changed = false
+        for i in projects.indices {
+            let current = projects[i].name.trimmingCharacters(in: .whitespacesAndNewlines)
+            if current.isEmpty { continue }
+            if !seen.contains(current.lowercased()) {
+                seen.insert(current.lowercased())
+                if projects[i].name != current {
+                    projects[i].name = current
+                    changed = true
+                }
+            } else {
+                let root = ProjectsStore.strippingSuffix(from: current)
+                var n = 2
+                while seen.contains("\(root) (\(n))".lowercased()) {
+                    n += 1
+                }
+                projects[i].name = "\(root) (\(n))"
+                seen.insert(projects[i].name.lowercased())
+                changed = true
+            }
+        }
+        if changed {
+            persist()
+        }
+    }
+
     func add(_ project: ManagedProject) {
-        projects.append(project)
+        var uniqued = project
+        uniqued.name = uniqueName(for: project.name)
+        projects.append(uniqued)
     }
 
     func update(_ project: ManagedProject) {
         guard let index = projects.firstIndex(where: { $0.id == project.id }) else { return }
-        projects[index] = project
+        var uniqued = project
+        uniqued.name = uniqueName(for: project.name, excludingID: project.id)
+        projects[index] = uniqued
     }
 
     func archive(_ project: ManagedProject) {
