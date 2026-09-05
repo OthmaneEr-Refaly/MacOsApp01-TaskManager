@@ -20,6 +20,27 @@ final class AppSettings: ObservableObject {
         var longSessionThresholdHours: Double
         var chartDays: Int
         var hasCompletedOnboarding: Bool
+
+        init(longSessionThresholdHours: Double, chartDays: Int, hasCompletedOnboarding: Bool) {
+            self.longSessionThresholdHours = longSessionThresholdHours
+            self.chartDays = chartDays
+            self.hasCompletedOnboarding = hasCompletedOnboarding
+        }
+
+        // Custom decode so ANY future new field defaults gracefully
+        // instead of failing the whole decode and silently resetting
+        // every other saved value — this is the bug that already hit
+        // hasCompletedOnboarding once.
+        private enum CodingKeys: String, CodingKey {
+            case longSessionThresholdHours, chartDays, hasCompletedOnboarding
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            longSessionThresholdHours = try container.decodeIfPresent(Double.self, forKey: .longSessionThresholdHours) ?? 2
+            chartDays = try container.decodeIfPresent(Int.self, forKey: .chartDays) ?? 7
+            hasCompletedOnboarding = try container.decodeIfPresent(Bool.self, forKey: .hasCompletedOnboarding) ?? false
+        }
     }
 
     init() {
