@@ -1,13 +1,14 @@
 import SwiftUI
 
 enum AppTab: CaseIterable {
-    case home, projects, stats
+    case home, projects, stats, settings
 
     var icon: String {
         switch self {
         case .home: return "shuffle"
         case .projects: return "folder.fill"
         case .stats: return "chart.bar.fill"
+        case .settings: return "gearshape.fill"
         }
     }
 }

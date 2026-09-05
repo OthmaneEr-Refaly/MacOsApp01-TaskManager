@@ -3,6 +3,7 @@ import SwiftUI
 enum ProjectFilter: String, CaseIterable {
     case active = "Active"
     case completed = "Completed"
+    case snoozed = "Snoozed"
     case archived = "Archived"
 }
 
@@ -16,9 +17,17 @@ struct ProjectsView: View {
 
     private var filteredProjects: [ManagedProject] {
         switch filter {
-        case .active: return store.projects.filter { $0.status == .active }
-        case .completed: return store.projects.filter { $0.status == .completed }
-        case .archived: return store.projects.filter { $0.status == .archived }
+        case .active:
+            return store.projects.filter { $0.status == .active }
+        case .completed:
+            return store.projects.filter { $0.status == .completed }
+        case .archived:
+            return store.projects.filter { $0.status == .archived }
+        case .snoozed:
+            return store.projects.filter {
+                if case .snoozed = $0.status { return true }
+                return false
+            }
         }
     }
 
@@ -61,6 +70,7 @@ struct ProjectsView: View {
         }
         .padding(32)
         .onAppear {
+            store.refreshSnoozeExpirations()
             appeared = false
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) {
                 appeared = true
@@ -79,6 +89,7 @@ struct ProjectsView: View {
         case .active: return "No projects yet — tap + to add one."
         case .completed: return "No completed projects yet."
         case .archived: return "No archived projects."
+        case .snoozed: return "No snoozed projects."
         }
     }
 
@@ -124,14 +135,26 @@ private struct FolderTile: View {
         switch project.status {
         case .completed: return .green
         case .archived: return .gray
+        case .snoozed: return .purple
         default: return project.quadrant.color
         }
+    }
+
+    private var subtitle: String {
+        if case .snoozed(let until) = project.status {
+            let df = DateFormatter()
+            df.dateFormat = "MMM d"
+            return "Until \(df.string(from: until))"
+        }
+        return project.estimatedHours == project.estimatedHours.rounded()
+            ? "\(Int(project.estimatedHours))h"
+            : String(format: "%.1fh", project.estimatedHours)
     }
 
     var body: some View {
         Button(action: action) {
             VStack(spacing: 8) {
-                Image(systemName: "folder.fill")
+                Image(systemName: project.status.isSnoozed ? "moon.fill" : "folder.fill")
                     .font(.system(size: 46))
                     .foregroundStyle(tintColor)
                     .opacity(project.status == .archived ? 0.55 : 1)
@@ -143,13 +166,9 @@ private struct FolderTile: View {
                     .lineLimit(2)
                     .multilineTextAlignment(.center)
 
-                Text(
-                    project.estimatedHours == project.estimatedHours.rounded()
-                        ? "\(Int(project.estimatedHours))h"
-                        : String(format: "%.1fh", project.estimatedHours)
-                )
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(.gray)
+                Text(subtitle)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.gray)
             }
             .frame(width: 100)
             .padding(.vertical, 8)
@@ -165,5 +184,12 @@ private struct FolderTile: View {
             isHovering = hovering
             if hovering { NSCursor.pointingHand.push() } else { NSCursor.pop() }
         }
+    }
+}
+
+private extension ProjectStatus {
+    var isSnoozed: Bool {
+        if case .snoozed = self { return true }
+        return false
     }
 }

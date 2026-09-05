@@ -109,6 +109,7 @@ final class ProjectsStore: ObservableObject {
 
     init() {
         self.projects = JSONFileStore.load([ManagedProject].self, from: filename) ?? []
+        refreshSnoozeExpirations()
     }
 
     func add(_ project: ManagedProject) {
@@ -124,13 +125,30 @@ final class ProjectsStore: ObservableObject {
         setStatus(.archived, for: project)
     }
 
-    // Brings a Completed or Archived project back into rotation.
-    func reactivate(_ project: ManagedProject) {
-        setStatus(.active, for: project)
+    func setSnoozed(_ project: ManagedProject, until: Date) {
+        setStatus(.snoozed(until: until), for: project)
+    }
+
+    // Called on load and whenever the Projects tab appears — any
+    // snoozed project whose date has passed goes back to .active
+    // automatically, no reload/relaunch required.
+    func refreshSnoozeExpirations() {
+        let now = Date()
+        for i in projects.indices {
+            if case .snoozed(let until) = projects[i].status, until <= now {
+                projects[i].status = .active
+            }
+        }
     }
 
     func complete(_ project: ManagedProject) {
         setStatus(.completed, for: project)
+    }
+
+    // Brings a Completed or Archived project back into rotation —
+    // the "undo" for what used to be a one-way door.
+    func reactivate(_ project: ManagedProject) {
+        setStatus(.active, for: project)
     }
 
     private func setStatus(_ status: ProjectStatus, for project: ManagedProject) {

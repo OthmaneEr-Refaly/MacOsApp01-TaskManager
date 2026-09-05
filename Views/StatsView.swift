@@ -3,6 +3,7 @@ import Charts
 
 struct StatsView: View {
     @ObservedObject var historyStore: SessionHistoryStore
+    var chartDays: Int = 7
 
     @State private var stats: [DailyWorkStat] = []
     @State private var animateIn = false
@@ -24,7 +25,7 @@ struct StatsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                Text("This Week")
+                Text(chartDays == 7 ? "This Week" : "Last \(chartDays) Days")
                     .font(.system(size: 22, weight: .bold))
                     .foregroundStyle(.white)
 
@@ -54,7 +55,7 @@ struct StatsView: View {
             .padding(32)
         }
         .onAppear {
-            stats = WorkStatsAggregator.aggregate(from: historyStore.sessions)
+            stats = WorkStatsAggregator.aggregate(from: historyStore.sessions, days: chartDays)
             withAnimation(.spring(response: 0.75, dampingFraction: 0.75).delay(0.1)) {
                 animateIn = true
             }

@@ -9,6 +9,7 @@ struct AddProjectView: View {
     @State private var draftHours: Double
     @State private var selectedImportance: Bool?
     @State private var selectedUrgency: Bool?
+    @State private var showSnoozeOptions = false
 
     private var editingProject: ManagedProject? {
         if case .edit(let project) = store.formMode { return project }
@@ -153,6 +154,26 @@ struct AddProjectView: View {
                         .elegantDarkGlow(cornerRadius: 20, glowOpacity: 0)
                         .disabled(isThisProjectActiveInSession)
                         .opacity(isThisProjectActiveInSession ? 0.35 : 1)
+
+                    Button("Snooze", action: { showSnoozeOptions = true })
+                        .buttonStyle(.plain)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.purple)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 12)
+                        .elegantDarkGlow(cornerRadius: 20, glowOpacity: 0)
+                        .disabled(isThisProjectActiveInSession)
+                        .opacity(isThisProjectActiveInSession ? 0.35 : 1)
+                        .confirmationDialog(
+                            "Snooze until...",
+                            isPresented: $showSnoozeOptions,
+                            titleVisibility: .visible
+                        ) {
+                            Button("Tomorrow") { snooze(days: 1) }
+                            Button("In 3 Days") { snooze(days: 3) }
+                            Button("Next Week") { snooze(days: 7) }
+                            Button("Cancel", role: .cancel) {}
+                        }
                 } else {
                     Button("Reactivate", action: reactivate)
                         .buttonStyle(.plain)
@@ -232,6 +253,13 @@ struct AddProjectView: View {
     private func reactivate() {
         guard let existing = editingProject else { return }
         store.reactivate(existing)
+        store.formMode = nil
+    }
+
+    private func snooze(days: Int) {
+        guard let existing = editingProject, !isThisProjectActiveInSession else { return }
+        let until = Calendar.current.date(byAdding: .day, value: days, to: Date()) ?? Date()
+        store.setSnoozed(existing, until: until)
         store.formMode = nil
     }
 

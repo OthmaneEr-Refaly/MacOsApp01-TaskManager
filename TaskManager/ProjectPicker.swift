@@ -1,5 +1,23 @@
 import SwiftUI
 
+// MARK: - Work-intent mode, chosen right before spinning. Changes
+// how the score weighs priority vs remaining time — this is what
+// actually solves "I want something light tonight" properly,
+// instead of just tolerating it as noise in the weighting.
+enum PickerMode: String, CaseIterable {
+    case focus = "Focus"
+    case light = "Light"
+    case surprise = "Surprise"
+
+    var icon: String {
+        switch self {
+        case .focus: return "scope"
+        case .light: return "leaf.fill"
+        case .surprise: return "sparkles"
+        }
+    }
+}
+
 // MARK: - Ruler tick marks (unchanged).
 struct RulerTicks: View {
     var totalLines: Int = 60
@@ -37,6 +55,7 @@ struct RulerTicks: View {
 struct ProjectPickerRuler: View {
 
     var projects: [ManagedProject]
+    var historyStore: SessionHistoryStore
     var hasActiveSession: Bool
     var activeProjectName: String?
     var onStart: (ManagedProject) -> Void = { _ in }
@@ -49,6 +68,7 @@ struct ProjectPickerRuler: View {
     @State private var hasPickedOnce = false
     @State private var reel: [ManagedProject] = []
     @State private var recommendation: ManagedProject? = nil
+    @State private var pickerMode: PickerMode = .focus
 
     // Eliminate-quadrant projects are never auto-recommended —
     // that quadrant means "don't do this," by definition.
@@ -102,17 +122,40 @@ struct ProjectPickerRuler: View {
                 .disabled(isSpinning)
             }
         } else {
-            LiquidChromeButton(cornerRadius: 22, action: spin) {
-                Text(eligibleProjects.isEmpty ? "Add a project first" : "What should I work on next?")
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                    .padding(.horizontal, 16)
-                    .frame(width: 280, height: 64)
+            VStack(spacing: 12) {
+                modeSelector
+
+                LiquidChromeButton(cornerRadius: 22, action: spin) {
+                    Text(eligibleProjects.isEmpty ? "Add a project first" : "What should I work on next?")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .padding(.horizontal, 16)
+                        .frame(width: 280, height: 64)
+                }
+                .opacity((isSpinning || eligibleProjects.isEmpty) ? 0.6 : 1)
+                .disabled(isSpinning || eligibleProjects.isEmpty)
             }
-            .opacity((isSpinning || eligibleProjects.isEmpty) ? 0.6 : 1)
-            .disabled(isSpinning || eligibleProjects.isEmpty)
+        }
+    }
+
+    private var modeSelector: some View {
+        HStack(spacing: 10) {
+            ForEach(PickerMode.allCases, id: \.self) { mode in
+                Button(action: { pickerMode = mode }) {
+                    Image(systemName: mode.icon)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(pickerMode == mode ? .white : .gray.opacity(0.5))
+                        .frame(width: 32, height: 32)
+                }
+                .buttonStyle(.plain)
+                .elegantDarkGlow(
+                    cornerRadius: 16,
+                    borderWidth: pickerMode == mode ? 1.5 : 1,
+                    glowOpacity: 0
+                )
+            }
         }
     }
 
@@ -161,17 +204,46 @@ struct ProjectPickerRuler: View {
         return reel[wrapped]
     }
 
-    private func score(for project: ManagedProject) -> Double {
+    private func trackedSeconds(for project: ManagedProject) -> Int {
+        historyStore.sessions
+            .filter { $0.projectID == project.id }
+            .reduce(0) { $0 + $1.durationSeconds }
+    }
+
+    // What's actually left, not what was originally guessed —
+    // a project you've already logged 4 of its 5 estimated hours
+    // on should score very differently than a fresh 5h project.
+    private func remainingHours(for project: ManagedProject) -> Double {
+        let tracked = Double(trackedSeconds(for: project)) / 3600.0
+        return max(project.estimatedHours - tracked, 0)
+    }
+
+    private func score(for project: ManagedProject, mode: PickerMode) -> Double {
         let important = project.quadrant == .doFirst || project.quadrant == .schedule
         let urgent = project.quadrant == .doFirst || project.quadrant == .delegate
-        let timeFactor = min(project.estimatedHours, 12) / 12
-        return (important ? 3 : 0) + (urgent ? 3 : 0) + (timeFactor * 2)
+        let normalizedRemaining = min(remainingHours(for: project), 12) / 12
+
+        switch mode {
+        case .focus:
+            // Priority dominates; remaining time barely nudges it.
+            return (important ? 5 : 0) + (urgent ? 5 : 0) + (normalizedRemaining * 0.5)
+        case .light:
+            // Inverted from the default — SHORTER remaining work
+            // scores higher, priority still counts but less.
+            let shortBonus = (1 - normalizedRemaining) * 3
+            return (important ? 2 : 0) + (urgent ? 2 : 0) + shortBonus
+        case .surprise:
+            // Compressed differences — closer to a genuine coin
+            // flip among everything eligible, controlled randomness
+            // rather than priority dominating.
+            return (important ? 1 : 0) + (urgent ? 1 : 0) + (normalizedRemaining * 0.3)
+        }
     }
 
     private func buildWeightedReel() -> [ManagedProject] {
         var built: [ManagedProject] = []
         for project in eligibleProjects {
-            let weight = score(for: project) + 0.5
+            let weight = score(for: project, mode: pickerMode) + 0.5
             let copies = max(1, Int((weight * 3).rounded()))
             built.append(contentsOf: Array(repeating: project, count: copies))
         }
