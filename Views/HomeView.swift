@@ -3,6 +3,7 @@ import SwiftUI
 struct HomeView: View {
     @ObservedObject var session: WorkSessionState
     @ObservedObject var projectsStore: ProjectsStore
+    @ObservedObject var historyStore: SessionHistoryStore
 
     var body: some View {
         GeometryReader { geo in
@@ -11,6 +12,7 @@ struct HomeView: View {
             ZStack {
                 ProjectPickerRuler(
                     projects: projectsStore.projects,
+                    historyStore: historyStore,
                     hasActiveSession: session.hasProject,
                     activeProjectName: session.selectedProject?.name,
                     onStart: { project in
