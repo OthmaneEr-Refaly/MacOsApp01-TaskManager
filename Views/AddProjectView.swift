@@ -64,6 +64,18 @@ struct AddProjectView: View {
             && selectedImportance != nil && selectedUrgency != nil
     }
 
+    private var trimmedDraftName: String {
+        draftName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var uniquedPreview: String {
+        store.uniqueName(for: draftName, excludingID: editingProject?.id)
+    }
+
+    private var willBeSuffixed: Bool {
+        !trimmedDraftName.isEmpty && uniquedPreview != trimmedDraftName
+    }
+
     var body: some View {
         GeometryReader { geo in
             let crossSize = min(geo.size.width - 100, geo.size.height * 0.72)
@@ -81,6 +93,14 @@ struct AddProjectView: View {
                         .multilineTextAlignment(.center)
                         .foregroundStyle(.white)
                         .frame(maxWidth: geo.size.width - 160)
+
+                    if willBeSuffixed {
+                        Text("“\(trimmedDraftName)” is taken — will be saved as “\(uniquedPreview)”.")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.orange)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: geo.size.width - 160)
+                    }
 
                     PriorityCross(importance: $selectedImportance, urgency: $selectedUrgency)
                         .frame(width: crossSize, height: crossSize)
