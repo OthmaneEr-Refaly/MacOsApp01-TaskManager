@@ -14,9 +14,21 @@ struct DurationTickSlider: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             tickBar
-            Text(formatted(hours))
-                .font(.system(size: readoutFontSize, weight: .bold, design: .rounded))
-                .foregroundStyle(.orange)
+
+            HStack(spacing: 10) {
+                Text(formatted(hours))
+                    .font(.system(size: readoutFontSize, weight: .bold, design: .rounded))
+                    .foregroundStyle(.orange)
+
+                Spacer()
+
+                stepperButton(systemImage: "minus") {
+                    hours = max(0, hours - step)
+                }
+                stepperButton(systemImage: "plus") {
+                    hours = min(maxHours, hours + step)
+                }
+            }
         }
     }
 
@@ -40,26 +52,24 @@ struct DurationTickSlider: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-            // highPriorityGesture — on macOS a plain Shape-based drag
-            // target can lose continued mouse-dragged tracking to the
-            // window's own move-by-background behavior after the
-            // initial click. This forces SwiftUI's gesture to win.
-            .highPriorityGesture(
-                DragGesture(minimumDistance: 0, coordinateSpace: .local)
-                    .onChanged { value in
-                        let fraction = min(max(value.location.x / geo.size.width, 0), 1)
-                        let raw = fraction * maxHours
-                        hours = (raw / step).rounded() * step
-                    }
-                    .onEnded { value in
-                        let fraction = min(max(value.location.x / geo.size.width, 0), 1)
-                        let raw = fraction * maxHours
-                        hours = (raw / step).rounded() * step
-                    }
-            )
         }
         .frame(height: barHeight)
+        // Purely visual now. Clicking here was fighting the
+        // window's own move-by-background behavior and could
+        // never reliably win — the stepper below is the real,
+        // actually-reliable control.
+        .allowsHitTesting(false)
+    }
+
+    private func stepperButton(systemImage: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 26, height: 26)
+        }
+        .buttonStyle(.plain)
+        .elegantDarkGlow(cornerRadius: 13, glowOpacity: 0)
     }
 
     private func formatted(_ h: Double) -> String {
