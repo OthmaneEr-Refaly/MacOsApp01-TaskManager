@@ -78,13 +78,17 @@ struct AddProjectView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let crossSize = min(geo.size.width - 100, geo.size.height * 0.72)
+            let crossSize = min(geo.size.width - 100, geo.size.height * 0.62)
 
             ZStack {
                 Color(red: 0.05, green: 0.05, blue: 0.06)
                     .ignoresSafeArea()
 
-                VStack(spacing: 20) {
+                // Scrollable so every row — including Save at the bottom —
+                // stays reachable at any window size. Idle (no scrolling)
+                // whenever the content fits.
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(spacing: 16) {
                     closeButton
 
                     TextField("Project name", text: $draftName)
@@ -100,6 +104,31 @@ struct AddProjectView: View {
                             .foregroundStyle(.orange)
                             .multilineTextAlignment(.center)
                             .frame(maxWidth: geo.size.width - 160)
+                    }
+
+                    // Status actions live here under the title (proven
+                    // click-safe territory) instead of the bottom row,
+                    // with no width caps — intrinsic row width only.
+                    if isEditing {
+                        if editingProject?.status == .active {
+                            HStack(spacing: 10) {
+                                statusButton("Archive", color: .red, disabled: isThisProjectActiveInSession, action: archive)
+                                statusButton("Complete", color: .green, disabled: isThisProjectActiveInSession, action: complete)
+                                statusButton("Snooze", color: .purple, disabled: isThisProjectActiveInSession, action: { showSnoozeOptions = true })
+                                    .confirmationDialog(
+                                        "Snooze until...",
+                                        isPresented: $showSnoozeOptions,
+                                        titleVisibility: .visible
+                                    ) {
+                                        Button("Tomorrow") { snooze(days: 1) }
+                                        Button("In 3 Days") { snooze(days: 3) }
+                                        Button("Next Week") { snooze(days: 7) }
+                                        Button("Cancel", role: .cancel) {}
+                                    }
+                            }
+                        } else {
+                            statusButton("Reactivate", color: .orange, disabled: false, action: reactivate)
+                        }
                     }
 
                     PriorityCross(importance: $selectedImportance, urgency: $selectedUrgency)
@@ -127,8 +156,10 @@ struct AddProjectView: View {
                     }
 
                     actionRow
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.bottom, 20)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .transition(.opacity)
@@ -151,69 +182,33 @@ struct AddProjectView: View {
         }
     }
 
+    // Save sits on its own row at the bottom. (Status pills live
+    // under the title above.) Actions, guards, gating unchanged.
     private var actionRow: some View {
-        HStack(spacing: 16) {
-            if isEditing {
-                if editingProject?.status == .active {
-                    Button("Archive", action: archive)
-                        .buttonStyle(.plain)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.red)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 12)
-                        .elegantDarkGlow(cornerRadius: 20, glowOpacity: 0)
-                        .disabled(isThisProjectActiveInSession)
-                        .opacity(isThisProjectActiveInSession ? 0.35 : 1)
-
-                    Button("Complete", action: complete)
-                        .buttonStyle(.plain)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.green)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 12)
-                        .elegantDarkGlow(cornerRadius: 20, glowOpacity: 0)
-                        .disabled(isThisProjectActiveInSession)
-                        .opacity(isThisProjectActiveInSession ? 0.35 : 1)
-
-                    Button("Snooze", action: { showSnoozeOptions = true })
-                        .buttonStyle(.plain)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.purple)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 12)
-                        .elegantDarkGlow(cornerRadius: 20, glowOpacity: 0)
-                        .disabled(isThisProjectActiveInSession)
-                        .opacity(isThisProjectActiveInSession ? 0.35 : 1)
-                        .confirmationDialog(
-                            "Snooze until...",
-                            isPresented: $showSnoozeOptions,
-                            titleVisibility: .visible
-                        ) {
-                            Button("Tomorrow") { snooze(days: 1) }
-                            Button("In 3 Days") { snooze(days: 3) }
-                            Button("Next Week") { snooze(days: 7) }
-                            Button("Cancel", role: .cancel) {}
-                        }
-                } else {
-                    Button("Reactivate", action: reactivate)
-                        .buttonStyle(.plain)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.orange)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 12)
-                        .elegantDarkGlow(cornerRadius: 20, glowOpacity: 0)
-                }
-            }
-
-            LiquidChromeButton(cornerRadius: 22, action: save) {
-                Text(isEditing ? "Save Changes" : "Save Project")
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(.white)
-                    .frame(width: 200, height: 56)
-            }
-            .opacity(canSave ? 1 : 0.35)
-            .disabled(!canSave)
+        LiquidChromeButton(cornerRadius: 22, action: save) {
+            Text(isEditing ? "Save Changes" : "Save Project")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(.white)
+                .frame(width: 200, height: 56)
         }
+        .opacity(canSave ? 1 : 0.35)
+        .disabled(!canSave)
+    }
+
+    // Fixed-frame pills, built like the original working ones
+    // (style on the Button, Text label untouched): fully fixed
+    // 104x44 frame instead of padding-derived sizing, so every
+    // living-button in this form shares the same construction.
+    private func statusButton(_ title: String, color: Color, disabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(title, action: action)
+            .buttonStyle(.plain)
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundStyle(color)
+            .lineLimit(1)
+            .frame(width: 104, height: 44)
+            .elegantDarkGlow(cornerRadius: 20, glowOpacity: 0)
+            .disabled(disabled)
+            .opacity(disabled ? 0.35 : 1)
     }
 
     private var closeButton: some View {
